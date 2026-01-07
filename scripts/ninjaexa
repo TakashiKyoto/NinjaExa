@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""
+ninjaexa - NinjaExa unified search tool for AI agents
+
+A smart wrapper around Exa AI search tools with intuitive subcommands.
+
+Usage:
+    ninjaexa "query"                    # Smart auto-detect (DEFAULT)
+    ninjaexa web "query"                # Web search
+    ninjaexa code "query"               # Code/docs search
+    ninjaexa news "query"               # News search (fresh content)
+    ninjaexa dual "query"               # Parallel web + code
+    ninjaexa crawl "url"                # Extract URL content
+    ninjaexa similar "url"              # Find similar content
+    ninjaexa deep "query"               # Deep research
+
+All additional flags are passed through to the underlying tool.
+
+Examples:
+    ninjaexa "Python asyncio"
+    ninjaexa "Python asyncio" --highlights
+    ninjaexa web "AI news" --days 7 --category news
+    ninjaexa code "React hooks" --code-tokens 10000
+    ninjaexa crawl "https://example.com/article"
+    ninjaexa similar "https://github.com/some/repo" --category github
+    ninjaexa deep "microservices vs monolith"
+
+Installation:
+    WSL/Linux: ln -sf /mnt/c/devlinux/skills/ninjaexa/scripts/ninjaexa ~/bin/ninjaexa
+    Windows:   Add scripts folder to PATH or create alias
+"""
+
+import os
+import sys
+import subprocess
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+# Resolve symlinks to get the real script directory
+_script_path = os.path.abspath(__file__)
+if os.path.islink(_script_path):
+    _script_path = os.path.realpath(_script_path)
+SCRIPT_DIR = os.path.dirname(_script_path)
+
+# Subcommand -> (script_file, extra_args)
+SUBCOMMANDS = {
+    # Search modes (route to exa_search.py with --mode)
+    'web': ('exa_search.py', ['--mode', 'web']),
+    'code': ('exa_search.py', ['--mode', 'code']),
+    'news': ('exa_search.py', ['--mode', 'news']),
+    'dual': ('exa_search.py', ['--mode', 'dual']),
+    'search': ('exa_search.py', []),  # explicit search = auto mode
+
+    # Specialized tools (separate scripts)
+    'crawl': ('exa_crawling.py', []),
+    'similar': ('exa_similar.py', []),
+    'deep': ('exa_deepsearch.py', []),
+}
+
+# Help aliases
+HELP_FLAGS = {'-h', '--help', 'help', '-?'}
+
+# =============================================================================
+# Main
+# =============================================================================
+
+def print_usage():
+    """Print usage information."""
+    print(__doc__)
+    print("Subcommands:")
+    print("  (none)   Smart auto-detect based on query content")
+    print("  web      Force web search mode")
+    print("  code     Force code/documentation search mode")
+    print("  news     Force news search (prioritizes fresh content)")
+    print("  dual     Run web + code search in parallel")
+    print("  crawl    Extract content from a URL")
+    print("  similar  Find content similar to a URL")
+    print("  deep     Deep research with AI synthesis")
+    print()
+    print("For subcommand-specific help: ninjaexa <subcommand> --help")
+
+
+def main():
+    """Main entry point."""
+    # No arguments - show usage
+    if len(sys.argv) < 2:
+        print_usage()
+        return 0
+
+    first_arg = sys.argv[1]
+
+    # Help requested
+    if first_arg.lower() in HELP_FLAGS:
+        print_usage()
+        return 0
+
+    # Check if first arg is a subcommand
+    first_arg_lower = first_arg.lower()
+
+    if first_arg_lower in SUBCOMMANDS:
+        # Explicit subcommand
+        script_file, extra_args = SUBCOMMANDS[first_arg_lower]
+        remaining_args = sys.argv[2:]
+    else:
+        # No subcommand - treat all args as query, use auto-detect
+        script_file = 'exa_search.py'
+        extra_args = []
+        remaining_args = sys.argv[1:]
+
+    # Build full path to script
+    script_path = os.path.join(SCRIPT_DIR, script_file)
+
+    # Verify script exists
+    if not os.path.exists(script_path):
+        print(f"[ERROR] Script not found: {script_path}", file=sys.stderr)
+        return 1
+
+    # Build command
+    cmd = [sys.executable, script_path] + extra_args + remaining_args
+
+    # Execute and pass through exit code
+    try:
+        result = subprocess.run(cmd)
+        return result.returncode
+    except KeyboardInterrupt:
+        print("\n[Interrupted]", file=sys.stderr)
+        return 130
+    except Exception as e:
+        print(f"[ERROR] Failed to execute: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
